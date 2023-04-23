@@ -12,6 +12,8 @@ class ChessBoard(tk.Canvas):
         self.board = [[0 for _ in range(self.num_cells)] for _ in range(self.num_cells)]  # 將每一個位置都初始化為 0
         self.turn = 1  # 設定遊戲開始時，黑方先手
         self.timer = 30  # 設定計時器初值為 30 秒
+        self.over = False
+        self.is_first_move = True  # 設定是否為第一步
         self.timer_id = None  # 計時器的 ID
         self.draw_board()  # 畫出棋盤
         self.bind("<Button-1>", self.click)  # 綁定滑鼠點擊事件到 click 函式
@@ -22,7 +24,7 @@ class ChessBoard(tk.Canvas):
         control_frame.pack(side=tk.TOP, pady=10)
 
         # 設定計時器
-        self.time_var = tk.StringVar(value="00:00")
+        self.time_var = tk.StringVar(value="00:30")
         timer_label = tk.Label(control_frame, textvariable=self.time_var, font=("Arial", 20))
         timer_label.pack(side=tk.LEFT, padx=10)
 
@@ -39,9 +41,7 @@ class ChessBoard(tk.Canvas):
         style = ttk.Style()
         style.configure('C.TButton', font=('Arial', 20), padding=10, borderwidth=0, background='#000', foreground='#000')
         style.map('C.TButton', background=[('active', '#000'), ('disabled', '#000')])
-
-        # 啟動計時器
-        self.start_timer()
+        #self.start_timer()
     
     # 繪製棋盤的網格線
     def draw_board(self):
@@ -71,11 +71,12 @@ class ChessBoard(tk.Canvas):
         self.timer_id = self.after(1000, self.start_timer)
 
     # 重置倒數計時器
-    def reset_timer(self):
+    def reset_timer(self, startT):
         self.after_cancel(self.timer_id)  # 取消之前的計時器
         self.timer = 30  # 重設計時器為30秒
         self.time_var.set("00:30")  # 更新計時器顯示
-        self.start_timer()  # 重新啟動計時器
+        if startT:
+            self.start_timer()  # 啟動計時器
        
     # 當倒數計時器時間到了的話
     def timer_expired(self):
@@ -91,11 +92,12 @@ class ChessBoard(tk.Canvas):
         # 判斷是否有空的位置
         if empty_cells:
             row, col = random.choice(empty_cells)  # 從空的位置隨機選擇一個位置
-            self.draw_piece(row, col)  # 在選擇的位置下一個棋子
+            self.draw_piece(row, col)  # 在選擇的位置下一個棋子            
             self.turn = 3 - self.turn  # 換到另外一方的回合
             self.turn_var.set("Black's turn" if self.turn == 1 else "White's turn")  # 更新回合顯示
-            self.after_cancel(self.timer_id)  # 停止計時器
-            self.reset_timer()  # 重設計時器
+            # 判斷遊戲是否結束
+            if not self.check_win(row, col):            
+                self.reset_timer(startT = True)
     
     # 在棋盤上點擊時會觸發的事件
     def click(self, event):
@@ -106,8 +108,14 @@ class ChessBoard(tk.Canvas):
             self.draw_piece(row, col)  # 在點擊的位置繪製一個棋子
             self.turn = 3 - self.turn  # 換到另外一方的回合
             self.turn_var.set("Black's turn" if self.turn == 1 else "White's turn")  # 更新回合顯示
-            self.check_win(row, col)  # 檢查是否已有一方獲勝
-            self.reset_timer()  # 重置計時器
+            # 判斷遊戲是否結束
+            if not self.check_win(row, col):            
+                # 判斷是否為第一步，True的話就開始計時，False的話就重製計時器
+                if self.is_first_move:
+                    self.is_first_move = False
+                    self.start_timer()
+                else:
+                    self.reset_timer(startT = True)
             
     # 繪製棋子
     def draw_piece(self, row, col):
@@ -143,13 +151,15 @@ class ChessBoard(tk.Canvas):
                     break
                 count += 1
             if count >= 5:  # 如果已經有五顆棋子相連
-                self.game_over(piece)  # 遊戲結束，顯示勝利者
-                return  # 結束搜尋
+                self.reset_timer(startT = False)
+                self.game_over(piece)  # 遊戲結束，顯示勝利者                
+                return True
         
         # 檢查是否棋盤已滿
         if all(self.board[i][j] != 0 for i in range(self.num_cells) for j in range(self.num_cells)):
-            self.game_over(0)  # 棋盤已滿，遊戲結束，顯示平局
-
+            self.reset_timer(startT = False)
+            self.game_over(0)  # 棋盤已滿，遊戲結束，顯示平局            
+            return True        
 
     # 當遊戲結束時執行    
     def game_over(self, winner):
@@ -170,7 +180,7 @@ class ChessBoard(tk.Canvas):
         self.draw_board()  # 畫出新的棋盤
         self.turn = 1  # 重置為黑色的回合
         self.turn_var.set("Black's turn" if self.turn == 1 else "White's turn")  # 更新回合顯示
-        self.reset_timer()  # 重置倒數計時器
+        self.reset_timer(startT=False)  # 重置倒數計時器
 
 def main():
     root = tk.Tk()  # 建立視窗物件
